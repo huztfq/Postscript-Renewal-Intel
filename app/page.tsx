@@ -1,101 +1,85 @@
-import Image from "next/image";
+// app/page.tsx
+import { supabaseAdmin } from '@/lib/supabase'
+import { AccountCard } from '@/components/AccountCard'
+import { CsvUploadWrapper } from '@/components/CsvUploadWrapper'
+import type { Account, Contact, Signal } from '@/lib/types'
 
-export default function Home() {
+async function getData() {
+  const [accountsRes, contactsRes, signalsRes] = await Promise.all([
+    supabaseAdmin.from('accounts').select('*').order('name'),
+    supabaseAdmin.from('contacts').select('*'),
+    supabaseAdmin.from('signals').select('*').is('dismissed_at', null),
+  ])
+  return {
+    accounts: (accountsRes.data ?? []) as Account[],
+    contacts: (contactsRes.data ?? []) as Contact[],
+    signals: (signalsRes.data ?? []) as Signal[],
+  }
+}
+
+export default async function DashboardPage() {
+  const { accounts, contacts, signals } = await getData()
+
+  const contactsByAccount = new Map<string, Contact[]>()
+  for (const c of contacts) {
+    const list = contactsByAccount.get(c.account_id) ?? []
+    list.push(c)
+    contactsByAccount.set(c.account_id, list)
+  }
+
+  const signalsByAccount = new Map<string, Signal[]>()
+  for (const s of signals) {
+    const list = signalsByAccount.get(s.account_id) ?? []
+    list.push(s)
+    signalsByAccount.set(s.account_id, list)
+  }
+
+  const sorted = [...accounts].sort((a, b) => {
+    const aS = signalsByAccount.get(a.id) ?? []
+    const bS = signalsByAccount.get(b.id) ?? []
+    const score = (s: Signal[]) => s.some(x => x.severity === 'critical') ? 2 : s.some(x => x.severity === 'warning') ? 1 : 0
+    return score(bS) - score(aS)
+  })
+
+  const totalCritical = signals.filter(s => s.severity === 'critical').length
+  const totalWarning = signals.filter(s => s.severity === 'warning').length
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="p-8">
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Account Intelligence</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            {accounts.length} accounts
+            {totalCritical > 0 && <> · <span className="text-red-600 font-medium">{totalCritical} critical</span></>}
+            {totalWarning > 0 && <> · <span className="text-amber-600">{totalWarning} warnings</span></>}
+          </p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
+
+      {accounts.length === 0 ? (
+        <div className="max-w-md mx-auto mt-16">
+          <h2 className="text-lg font-semibold text-gray-700 mb-4 text-center">Upload CRM Export to Get Started</h2>
+          <CsvUploadWrapper />
+        </div>
+      ) : (
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {sorted.map(account => (
+              <AccountCard
+                key={account.id}
+                account={account}
+                contacts={contactsByAccount.get(account.id) ?? []}
+                signals={signalsByAccount.get(account.id) ?? []}
+              />
+            ))}
+          </div>
+          <div className="max-w-md">
+            <p className="text-sm text-gray-500 mb-2 font-medium">Re-upload to refresh data</p>
+            <CsvUploadWrapper />
+          </div>
+        </div>
+      )}
     </div>
-  );
+  )
 }
