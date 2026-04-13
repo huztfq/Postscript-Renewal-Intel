@@ -119,13 +119,25 @@ export async function POST(req: NextRequest) {
     if (error) contactErrors.push(error.message)
   }
 
-  // Single bulk insert for email-less contacts (ignore duplicates on re-upload)
-  if (withoutEmail.length > 0) {
+  // Email-less contacts split by whether they have a LinkedIn URL.
+  // Those with LinkedIn use UNIQUE(account_id, linkedin_url) as the conflict key.
+  // Those with neither fall back to insert-ignore so re-uploads don't crash.
+  const withLinkedIn    = withoutEmail.filter(c => c.linkedin_url)
+  const withNeither     = withoutEmail.filter(c => !c.linkedin_url)
+
+  if (withLinkedIn.length > 0) {
     const { error } = await supabaseAdmin
       .from('contacts')
-      .insert(withoutEmail.map(toRow))
-    // ignore duplicate errors for email-less contacts
-    if (error && !error.message.includes('duplicate')) contactErrors.push(error.message)
+      .upsert(withLinkedIn.map(toRow), { onConflict: 'account_id,linkedin_url', ignoreDuplicates: false })
+    if (error) contactErrors.push(error.message)
+  }
+
+  if (withNeither.length > 0) {
+    const { error } = await supabaseAdmin
+      .from('contacts')
+      .insert(withNeither.map(toRow))
+    // Only hard-fail on real errors; duplicate inserts for fully anonymous contacts are tolerated.
+    if (error && !error.message.toLowerCase().includes('duplicate')) contactErrors.push(error.message)
   }
 
   if (contactErrors.length > 0) {
