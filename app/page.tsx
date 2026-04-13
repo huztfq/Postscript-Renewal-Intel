@@ -1,11 +1,13 @@
 // app/page.tsx
 export const dynamic = 'force-dynamic'
+import { unstable_noStore as noStore } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase'
 import { AccountCard } from '@/components/AccountCard'
 import { CsvUploadWrapper } from '@/components/CsvUploadWrapper'
 import type { Account, Contact, Signal } from '@/lib/types'
 
 async function getData() {
+  noStore()
   const [accountsRes, contactsRes, signalsRes] = await Promise.all([
     supabaseAdmin.from('accounts').select('*').order('name'),
     supabaseAdmin.from('contacts').select('*'),

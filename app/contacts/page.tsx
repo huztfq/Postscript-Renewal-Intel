@@ -1,5 +1,6 @@
 // app/contacts/page.tsx
 export const dynamic = 'force-dynamic'
+import { unstable_noStore as noStore } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase'
 import Link from 'next/link'
 import type { Contact, Account, Signal } from '@/lib/types'
@@ -7,6 +8,7 @@ import { SignalBadge } from '@/components/SignalBadge'
 import { ExternalLink, Users } from 'lucide-react'
 
 async function getData() {
+  noStore()
   const [contactsRes, accountsRes, signalsRes] = await Promise.all([
     supabaseAdmin
       .from('contacts')

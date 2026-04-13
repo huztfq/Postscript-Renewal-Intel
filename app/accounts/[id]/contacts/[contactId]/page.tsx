@@ -1,5 +1,6 @@
 // app/accounts/[id]/contacts/[contactId]/page.tsx
 export const dynamic = 'force-dynamic'
+import { unstable_noStore as noStore } from 'next/cache'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -9,6 +10,7 @@ import { ChevronLeft, ExternalLink, Mail } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 async function getData(contactId: string) {
+  noStore()
   const [contactRes, signalsRes] = await Promise.all([
     supabaseAdmin.from('contacts').select('*').eq('id', contactId).single(),
     supabaseAdmin.from('signals').select('*').eq('contact_id', contactId).order('detected_at', { ascending: false }),
