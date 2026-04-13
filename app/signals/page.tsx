@@ -1,4 +1,5 @@
 // app/signals/page.tsx
+export const dynamic = 'force-dynamic'
 import { supabaseAdmin } from '@/lib/supabase'
 import { SignalBadge } from '@/components/SignalBadge'
 import Link from 'next/link'

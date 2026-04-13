@@ -23,6 +23,19 @@ export function CsvUpload({ onComplete }: { onComplete: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   async function handleFile(file: File) {
+    // File type check (covers drag-and-drop which bypasses <input accept>)
+    const isCSV = file.type === 'text/csv' || file.type === 'application/vnd.ms-excel' || file.name.toLowerCase().endsWith('.csv')
+    if (!isCSV) {
+      toast.error(`"${file.name}" is not a CSV file. Please upload a .csv file.`, { duration: 6000 })
+      return
+    }
+
+    // Size sanity check (50 MB limit)
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('File is too large (max 50 MB). Please split it into smaller files.', { duration: 6000 })
+      return
+    }
+
     setStatus('parsing')
     Papa.parse<Record<string, string>>(file, {
       header: true,
@@ -30,15 +43,38 @@ export function CsvUpload({ onComplete }: { onComplete: () => void }) {
       complete: (result) => {
         const headers = result.meta.fields ?? []
         const rows = result.data
+
+        // Empty file check
+        if (rows.length === 0) {
+          toast.error('The CSV file has no data rows. Please check the file and try again.', { duration: 6000 })
+          setStatus('idle')
+          return
+        }
+
+        // No headers at all
+        if (headers.length === 0) {
+          toast.error('Could not read column headers from the CSV. Make sure the first row contains column names.', { duration: 6000 })
+          setStatus('idle')
+          return
+        }
+
         const detected = autoDetectMapping(headers)
+
+        // Warn about optional but important fields that weren't detected
+        const missingOptional = (['Email', 'LinkedIn URL', 'Title'] as const).filter(f => !detected.mapping[f])
+        if (missingOptional.length > 0 && REQUIRED_FIELDS.every(f => detected.mapping[f] !== null)) {
+          toast.warning(`Could not auto-detect: ${missingOptional.join(', ')}. You can map them manually.`, { duration: 5000 })
+        }
 
         // All required fields confident? Skip the mapping UI
         const allConfident = REQUIRED_FIELDS.every(f => detected.mapping[f] !== null)
         if (allConfident) {
-          const mapped = Object.values(detected.confidences).filter(c => c > 0).length
-          toast.info(`Auto-mapped ${mapped} columns`, { duration: 3000 })
+          const mappedCount = Object.values(detected.confidences).filter(c => c > 0).length
+          toast.info(`Auto-mapped ${mappedCount} of ${headers.length} columns from ${rows.length} rows`, { duration: 3000 })
           runIngest(rows, detected.mapping)
         } else {
+          const missingRequired = REQUIRED_FIELDS.filter(f => !detected.mapping[f])
+          toast.warning(`Couldn't auto-detect required columns: ${missingRequired.join(', ')}. Please map them manually.`, { duration: 5000 })
           setParsed({ headers, rows })
           setMapping(detected.mapping)
           setStatus('mapping')
@@ -68,6 +104,13 @@ export function CsvUpload({ onComplete }: { onComplete: () => void }) {
       const { accountIds, stats } = await ingestRes.json()
       setStats(stats)
 
+      // Warn if nothing useful was imported
+      if (stats.contacts === 0) {
+        toast.warning('No contacts were imported. Check that your CSV has Account Name, First Name, and Last Name columns.', { id: loadingId, duration: 10000 })
+        setStatus('idle')
+        return
+      }
+
       toast.loading('Queuing enrichment jobs…', { id: loadingId })
       setStatus('enriching')
       const enrichRes = await fetch('/api/enrich', {
@@ -75,13 +118,22 @@ export function CsvUpload({ onComplete }: { onComplete: () => void }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accountIds }),
       })
+
+      const enrichData = await enrichRes.json().catch(() => ({}))
+
       if (!enrichRes.ok) {
-        const err = await enrichRes.json().catch(() => ({}))
-        toast.warning(`Ingest done, enrichment failed: ${err.error ?? 'unknown'}`, { id: loadingId, duration: 8000 })
+        toast.warning(
+          `${stats.accounts} accounts · ${stats.contacts} contacts saved. Enrichment queuing failed — jobs will not run automatically.`,
+          { id: loadingId, duration: 10000 },
+        )
       } else {
+        const { dispatched } = enrichData
+        const enrichMsg = dispatched?.contacts > 0
+          ? `${dispatched.contacts} contacts queued for LinkedIn enrichment.`
+          : `No contacts with LinkedIn URLs to enrich.`
         toast.success(
-          `${stats.accounts} accounts · ${stats.contacts} contacts ingested. Enrichment running in background.`,
-          { id: loadingId, duration: 6000 },
+          `${stats.accounts} accounts · ${stats.contacts} contacts imported. ${enrichMsg}`,
+          { id: loadingId, duration: 7000 },
         )
       }
       setStatus('done')
@@ -130,6 +182,12 @@ export function CsvUpload({ onComplete }: { onComplete: () => void }) {
           {status === 'enriching' && 'Queuing enrichment jobs…'}
           {status === 'done' && `Done! ${stats?.accounts} accounts, ${stats?.contacts} contacts.`}
         </p>
+        {status === 'idle' && (
+          <p className="text-xs text-gray-400 mt-1">
+            Requires: <span className="font-medium">First Name, Last Name, Account Name</span>
+            {' · '}Optional: Email, Title, LinkedIn URL
+          </p>
+        )}
       </div>
 
       {status === 'mapping' && parsed && mapping && (

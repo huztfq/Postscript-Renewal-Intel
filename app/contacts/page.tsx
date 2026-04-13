@@ -1,4 +1,5 @@
 // app/contacts/page.tsx
+export const dynamic = 'force-dynamic'
 import { supabaseAdmin } from '@/lib/supabase'
 import Link from 'next/link'
 import type { Contact, Account, Signal } from '@/lib/types'

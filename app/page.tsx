@@ -1,4 +1,5 @@
 // app/page.tsx
+export const dynamic = 'force-dynamic'
 import { supabaseAdmin } from '@/lib/supabase'
 import { AccountCard } from '@/components/AccountCard'
 import { CsvUploadWrapper } from '@/components/CsvUploadWrapper'
