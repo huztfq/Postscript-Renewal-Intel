@@ -33,7 +33,9 @@ CREATE TABLE contacts (
   linkedin_current_title TEXT,
   linkedin_current_company TEXT,
   last_enriched_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT contacts_account_id_email_key UNIQUE (account_id, email),
+  CONSTRAINT contacts_account_id_linkedin_url_key UNIQUE (account_id, linkedin_url)
 );
 
 CREATE TABLE signals (
